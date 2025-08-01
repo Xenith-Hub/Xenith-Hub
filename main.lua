@@ -62,16 +62,182 @@ function ESPLibrary.LerpColorSequence(a, b, alpha)
     return ColorSequence.new(keys)
 end
 
----------------------------------------------------------------------------------------------------
--- Batch toggle implementations (unchanged)
----------------------------------------------------------------------------------------------------
--- ... *[keep all of your ToggleESP, ToggleBox, ToggleCorners, ToggleSides, etc. exactly as-is]*
+function ESPLibrary:ToggleESP(state)
+    self.Settings.Enabled = state
+    if self.XenithESP then
+        self.XenithESP.Enabled = state
+    end
+end
 
----------------------------------------------------------------------------------------------------
--- Update colors/text helpers
----------------------------------------------------------------------------------------------------
--- ... *[keep UpdateAllColors, UpdateAllText, UpdatePlayerColors, UpdatePlayerText exactly as-is]*
+function ESPLibrary:ToggleBox(state)
+    self.Settings.Box.Enabled = state
+    for _, data in pairs(self.ExistantPlayers) do
+        if data.MainFrame then
+            -- Use transparency instead of visibility to keep text visible
+            if state then 
+                data.MainFrame.BackgroundTransparency = 0.8
+                if data.FrameStroke then
+                    data.FrameStroke.Transparency = 0
+                end
+            else
+                data.MainFrame.BackgroundTransparency = 1
+                if data.FrameStroke then
+                    data.FrameStroke.Transparency = 1
+                end
+            end
+        end
+    end
+end
 
+function ESPLibrary:ToggleCorners(state)
+    self.Settings.Box.ShowCorners = state
+    for _, data in pairs(self.ExistantPlayers) do
+        for _, cornerName in ipairs({"CornerTL", "CornerBL", "CornerTR", "CornerBR"}) do
+            if data[cornerName] then
+                data[cornerName].Visible = state and self.Settings.Box.Enabled
+            end
+        end
+    end
+end
+
+function ESPLibrary:ToggleSides(state)
+    self.Settings.Box.ShowSides = state
+    for _, data in pairs(self.ExistantPlayers) do
+        for _, sideName in ipairs({"SideTL_H", "SideTL_V", "SideTR_H", "SideTR_V", "SideBL_H", "SideBL_V", "SideBR_H", "SideBR_V"}) do
+            if data[sideName] then
+                data[sideName].Visible = state and self.Settings.Box.Enabled
+            end
+        end
+    end
+end
+
+function ESPLibrary:ToggleBoxTeamColor(state)
+    self.Settings.Box.UseTeamColor = state
+    self:UpdateAllColors()
+end
+
+function ESPLibrary:ToggleTextTeamColor(state)
+    self.Settings.Text.UseTeamColor = state
+    self:UpdateAllColors()
+end
+
+function ESPLibrary:ToggleHighlight(state)
+    self.Settings.Highlight.Enabled = state
+    for _, data in pairs(self.ExistantPlayers) do
+        if data.Highlight then
+            data.Highlight.Enabled = state
+        end
+    end
+end
+
+function ESPLibrary:ToggleHighlightTeamColor(state)
+    self.Settings.Highlight.UseTeamColor = state
+    self:UpdateAllColors()
+end
+
+function ESPLibrary:ToggleName(state)
+    self.Settings.Text.ShowName = state
+    self:UpdateAllText()
+end
+
+function ESPLibrary:ToggleHealth(state)
+    self.Settings.Text.ShowHealth = state
+    self:UpdateAllText()
+end
+
+function ESPLibrary:ToggleDistance(state)
+    self.Settings.Text.ShowDistance = state
+    self:UpdateAllText()
+end
+
+function ESPLibrary:UpdateAllColors()
+    for player, data in pairs(self.ExistantPlayers) do
+        self:UpdatePlayerColors(player, data)
+    end
+end
+
+function ESPLibrary:UpdateAllText()
+    for player, data in pairs(self.ExistantPlayers) do
+        self:UpdatePlayerText(player, data)
+    end
+end
+
+function ESPLibrary:UpdatePlayerColors(player, data)
+    local teamColor = self:GetTeamColor(player)
+    
+    -- Update box colors
+    if self.Settings.Box.UseTeamColor then
+        if data.FrameStroke then
+            data.FrameStroke.Color = teamColor
+        end
+        
+        -- Update corners and sides
+        for _, cornerName in ipairs({"CornerTL", "CornerBL", "CornerTR", "CornerBR"}) do
+            if data[cornerName] then
+                data[cornerName].BackgroundColor3 = teamColor
+            end
+        end
+        
+        for _, sideName in ipairs({"SideTL_H", "SideTL_V", "SideTR_H", "SideTR_V", "SideBL_H", "SideBL_V", "SideBR_H", "SideBR_V"}) do
+            if data[sideName] then
+                data[sideName].BackgroundColor3 = teamColor
+            end
+        end
+    end
+    
+    -- Update text colors
+    if self.Settings.Text.UseTeamColor and data.NameLabel then
+        data.NameLabel.TextColor3 = teamColor
+    end
+    
+    -- Update highlight colors
+    if self.Settings.Highlight.UseTeamColor and data.Highlight then
+        data.Highlight.OutlineColor = teamColor
+        data.Highlight.FillColor = teamColor
+    end
+end
+
+function ESPLibrary:UpdatePlayerText(player, data)
+    if not data.NameLabel then return end
+    
+    local textParts = {}
+    
+    if self.Settings.Text.ShowHealth then
+        local chr = player.Character
+        if chr then
+            local hum = chr:FindFirstChild("Humanoid")
+            if hum then
+                local hpPct = hum.Health / hum.MaxHealth
+                table.insert(textParts, string.format("[%d%%]", math.floor(hpPct * 100)))
+            end
+        end
+    end
+    
+    if self.Settings.Text.ShowName then
+        table.insert(textParts, player.Name)
+    end
+    
+    if self.Settings.Text.ShowDistance then
+        local chr = player.Character
+        if chr then
+            local hrp = chr:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local cam = workspace.CurrentCamera
+                local dist = (cam.CFrame.Position - hrp.Position).Magnitude
+                table.insert(textParts, string.format("[%d]", math.round(dist)))
+            end
+        end
+    end
+    
+    -- Show text if any text options are enabled
+    local showText = self.Settings.Text.ShowName or self.Settings.Text.ShowHealth or self.Settings.Text.ShowDistance
+    if showText and #textParts > 0 then
+        data.NameLabel.Text = table.concat(textParts, " / ")
+        data.NameLabel.Visible = true
+    else
+        data.NameLabel.Visible = false
+    end
+end
 ---------------------------------------------------------------------------------------------------
 -- Per-frame updater (NEW!)
 ---------------------------------------------------------------------------------------------------
