@@ -1,4 +1,4 @@
-Print("Version 3")
+print("Version 3")
 local Players     = cloneref(game:GetService("Players"))
 local RunService  = cloneref(game:GetService("RunService"))
 local TextService = game:GetService("TextService")
