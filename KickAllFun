@@ -13,7 +13,7 @@ while task.wait(0.1) do
         end
     else
         queueonteleport([[
-            KickAll()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Xenith-Hub/Xenith-Hub/refs/heads/main/KickAllFun"))()
         ]])
 
         local Player = game.Players.LocalPlayer    
